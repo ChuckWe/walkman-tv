@@ -271,7 +271,8 @@ fun PlaylistNameDialog(
                     .fillMaxWidth()
                     .clip(RoundedCornerShape(10.dp))
                     .background(AppColors.BgDeep)
-                    .padding(horizontal = 14.dp, vertical = 14.dp),
+                    .padding(horizontal = 14.dp, vertical = 14.dp)
+                    .leaveFieldOnBack(),
                 decorationBox = { inner ->
                     Box {
                         if (name.isEmpty()) {

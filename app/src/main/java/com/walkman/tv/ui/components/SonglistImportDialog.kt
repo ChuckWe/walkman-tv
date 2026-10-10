@@ -90,6 +90,9 @@ fun SonglistImportDialog(onDismiss: () -> Unit) {
         onDismissRequest = { if (!importing) onDismiss() },
         properties = DialogProperties(usePlatformDefaultWidth = false),
     ) {
+        // Read inside Dialog: it's a separate window with its own focus owner.
+        val focusManager = androidx.compose.ui.platform.LocalFocusManager.current
+        val keyboard = androidx.compose.ui.platform.LocalSoftwareKeyboardController.current
         Column(
             modifier = Modifier
                 .width(540.dp)
@@ -122,12 +125,14 @@ fun SonglistImportDialog(onDismiss: () -> Unit) {
                 ),
                 cursorBrush = SolidColor(AppColors.AccentGreen),
                 keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
-                keyboardActions = KeyboardActions(onDone = { /* keep open, no submit */ }),
+                // Done: keep the dialog open (no submit) but step off the field so the remote can reach 导入.
+                keyboardActions = KeyboardActions(onDone = { leaveField(focusManager, keyboard) }),
                 modifier = Modifier
                     .fillMaxWidth()
                     .clip(RoundedCornerShape(10.dp))
                     .background(AppColors.BgDeep)
-                    .padding(horizontal = 14.dp, vertical = 12.dp),
+                    .padding(horizontal = 14.dp, vertical = 12.dp)
+                    .leaveFieldOnBack(),
                 decorationBox = { inner ->
                     Box {
                         if (raw.isEmpty()) {
