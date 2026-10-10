@@ -224,14 +224,6 @@ fun PlaylistNameDialog(
 ) {
     var name by remember { mutableStateOf(initial) }
     var showQr by remember { mutableStateOf(false) }
-    val fieldFocus = remember { FocusRequester() }
-    val keyboard = androidx.compose.ui.platform.LocalSoftwareKeyboardController.current
-
-    // Auto-focus the text field on open so the system IME can be invoked immediately.
-    LaunchedEffect(Unit) {
-        runCatching { fieldFocus.requestFocus() }
-        runCatching { keyboard?.show() }
-    }
     // QR-submitted names get pushed straight into the field.
     LaunchedEffect(Unit) {
         appContainer.events.qrPlaylistName.collect { received ->
@@ -279,8 +271,7 @@ fun PlaylistNameDialog(
                     .fillMaxWidth()
                     .clip(RoundedCornerShape(10.dp))
                     .background(AppColors.BgDeep)
-                    .padding(horizontal = 14.dp, vertical = 14.dp)
-                    .focusRequester(fieldFocus),
+                    .padding(horizontal = 14.dp, vertical = 14.dp),
                 decorationBox = { inner ->
                     Box {
                         if (name.isEmpty()) {

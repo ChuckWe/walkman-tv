@@ -25,8 +25,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.focus.FocusRequester
-import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
@@ -80,12 +78,6 @@ fun SonglistImportDialog(onDismiss: () -> Unit) {
     val canImport = !importing && doneCount == null && (
         parsedRef != null || (pureId != null && manualSource != null)
         )
-    val urlFocus = remember { FocusRequester() }
-    val keyboard = androidx.compose.ui.platform.LocalSoftwareKeyboardController.current
-    LaunchedEffect(Unit) {
-        runCatching { urlFocus.requestFocus() }
-        runCatching { keyboard?.show() }
-    }
     // QR-pushed URL replaces whatever's in the field.
     LaunchedEffect(Unit) {
         appContainer.events.qrSonglistUrl.collect { received ->
@@ -135,8 +127,7 @@ fun SonglistImportDialog(onDismiss: () -> Unit) {
                     .fillMaxWidth()
                     .clip(RoundedCornerShape(10.dp))
                     .background(AppColors.BgDeep)
-                    .padding(horizontal = 14.dp, vertical = 12.dp)
-                    .focusRequester(urlFocus),
+                    .padding(horizontal = 14.dp, vertical = 12.dp),
                 decorationBox = { inner ->
                     Box {
                         if (raw.isEmpty()) {
