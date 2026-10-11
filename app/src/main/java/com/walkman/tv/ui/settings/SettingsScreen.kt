@@ -241,6 +241,31 @@ fun SettingsScreen(modifier: Modifier = Modifier) {
             }
         }
 
+        Section("黑胶颜色") {
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                com.walkman.tv.data.store.VinylColor.entries.forEach { color ->
+                    TvPill(
+                        onClick = { scope.launch { appContainer.settingsStore.update { it.copy(vinylColor = color) } } },
+                        selected = settings.vinylColor == color,
+                    ) {
+                        Text(color.label, fontSize = 13.sp)
+                    }
+                }
+            }
+        }
+
+        Section("播放界面") {
+            ToggleRow("播放控件自动隐藏", settings.autoHidePlayerControls) {
+                scope.launch { appContainer.settingsStore.update { it.copy(autoHidePlayerControls = !it.autoHidePlayerControls) } }
+            }
+            Spacer(Modifier.height(8.dp))
+            Text(
+                "开启后，播放页 5 秒无操作自动隐藏进度条和播放按钮，按方向键或确认键重新显示。",
+                color = AppColors.TextMuted,
+                fontSize = 11.sp,
+            )
+        }
+
         Section("下载目录") {
             val roots = remember { appContainer.downloadStore.availableRoots() }
             val treeUriStr = settings.customDownloadTreeUri

@@ -13,6 +13,9 @@ data class Playlist(
     val name: String,
     val tracks: List<Track> = emptyList(),
     val updatedAt: Long = System.currentTimeMillis(),
+    /** Set for lists imported from a platform songlist, so 更新歌单 can re-fetch it. null for
+     *  hand-made lists and for lists imported before this field existed. */
+    val origin: PlaylistOrigin? = null,
 ) {
     companion object {
         const val LOVE = "love"
@@ -21,3 +24,7 @@ data class Playlist(
         const val HISTORY_NAME = "播放历史"
     }
 }
+
+/** Where an imported playlist came from — same shape as SonglistImporter's SonglistRef. */
+@Serializable
+data class PlaylistOrigin(val source: SourceID, val id: String)

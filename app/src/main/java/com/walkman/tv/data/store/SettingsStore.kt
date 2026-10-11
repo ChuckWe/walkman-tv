@@ -20,6 +20,17 @@ enum class LyricSize(val label: String, val activeSp: Int, val inactiveSp: Int, 
     MAX("最大", 40, 24, 18),
 }
 
+/** Color theme for the player's spinning vinyl disc. GREEN is the original look and the default;
+ *  BLACK (a real record) was requested in #8. Palettes live in PlayerScreen. */
+@Serializable
+enum class VinylColor(val label: String) {
+    GREEN("翠绿"),
+    BLACK("经典黑"),
+    RED("酒红"),
+    BLUE("深蓝"),
+    GOLD("琥珀金"),
+}
+
 @Serializable
 data class Settings(
     val preferredQuality: Quality = Quality.FLAC24,
@@ -31,6 +42,10 @@ data class Settings(
     val audioOffloadEnabled: Boolean = true,
     val showLyricTranslation: Boolean = true,
     val lyricSize: LyricSize = LyricSize.STANDARD,
+    val vinylColor: VinylColor = VinylColor.GREEN,
+    /** Player screen: hide progress bar + transport after a few idle seconds; any D-pad / OK key
+     *  brings them back. Off by default. */
+    val autoHidePlayerControls: Boolean = false,
     /** Absolute path of the chosen download root (a writable storage volume). null ⇒ default
      *  app-scoped Music dir on primary storage. See DownloadStore.availableRoots(). */
     val customDownloadDir: String? = null,

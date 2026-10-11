@@ -29,6 +29,7 @@ import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -376,6 +377,9 @@ private fun PlaylistDetailPane(
     val playFocus = remember { FocusRequester() }
     LaunchedEffect(playlist.id) { runCatching { playFocus.requestFocus() } }
     var showBatchDownload by remember { mutableStateOf(false) }
+    var refreshing by remember(playlist.id) { mutableStateOf(false) }
+    val scope = rememberCoroutineScope()
+    val context = androidx.compose.ui.platform.LocalContext.current
 
     Column(modifier = Modifier.fillMaxSize()) {
         Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(bottom = 12.dp)) {
@@ -418,6 +422,38 @@ private fun PlaylistDetailPane(
                                 )
                                 Spacer(Modifier.width(4.dp))
                                 Text("下载全部", fontSize = 12.sp)
+                            }
+                        }
+                    }
+                    if (playlist.origin != null) {
+                        TvPill(
+                            onClick = {
+                                if (refreshing) return@TvPill
+                                refreshing = true
+                                scope.launch {
+                                    val msg = runCatching {
+                                        com.walkman.tv.playback.imports.SonglistImporter.refreshPlaylist(
+                                            playlist = playlist,
+                                            songlists = appContainer.songlists,
+                                            library = appContainer.libraryStore,
+                                        )
+                                    }.fold(
+                                        onSuccess = { r ->
+                                            if (r.added == 0 && r.removed == 0) "已是最新（${r.total} 首）"
+                                            else "已更新：共 ${r.total} 首，新增 ${r.added}，移除 ${r.removed}"
+                                        },
+                                        onFailure = { e -> e.localizedMessage ?: e.toString() },
+                                    )
+                                    refreshing = false
+                                    android.widget.Toast.makeText(context, msg, android.widget.Toast.LENGTH_SHORT).show()
+                                }
+                            },
+                            contentPadding = PaddingValues(horizontal = 14.dp, vertical = 7.dp),
+                        ) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Icon(Icons.Filled.Refresh, contentDescription = null, modifier = Modifier.size(14.dp))
+                                Spacer(Modifier.width(4.dp))
+                                Text(if (refreshing) "更新中…" else "更新歌单", fontSize = 12.sp)
                             }
                         }
                     }

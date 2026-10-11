@@ -2,6 +2,7 @@ package com.walkman.tv.data.store
 
 import android.content.Context
 import com.walkman.tv.data.model.Playlist
+import com.walkman.tv.data.model.PlaylistOrigin
 import com.walkman.tv.data.model.Track
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -70,8 +71,8 @@ class LibraryStore(context: Context) {
         persist()
     }
 
-    suspend fun createList(name: String): Playlist {
-        val list = Playlist(name = name)
+    suspend fun createList(name: String, origin: PlaylistOrigin? = null): Playlist {
+        val list = Playlist(name = name, origin = origin)
         _userLists.value = _userLists.value + list
         persist()
         return list
@@ -107,6 +108,14 @@ class LibraryStore(context: Context) {
             } else {
                 pl
             }
+        }
+        persist()
+    }
+
+    /** Swap a user list's tracks wholesale (更新歌单 mirrors the platform songlist). */
+    suspend fun replaceTracks(listId: String, tracks: List<Track>) {
+        _userLists.value = _userLists.value.map {
+            if (it.id == listId) it.copy(tracks = tracks.distinctBy { t -> t.id }, updatedAt = System.currentTimeMillis()) else it
         }
         persist()
     }

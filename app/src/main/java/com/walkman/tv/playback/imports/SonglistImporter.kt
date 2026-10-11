@@ -1,5 +1,8 @@
 package com.walkman.tv.playback.imports
 
+import com.walkman.tv.data.model.Playlist
+import com.walkman.tv.data.model.PlaylistOrigin
+import com.walkman.tv.data.model.SonglistDetail
 import com.walkman.tv.data.model.SonglistInfo
 import com.walkman.tv.data.model.SourceID
 import com.walkman.tv.data.store.LibraryStore
@@ -15,6 +18,8 @@ sealed class ImportError(message: String) : Throwable(message) {
 }
 
 data class ImportResult(val playlistId: String, val count: Int)
+
+data class RefreshResult(val total: Int, val added: Int, val removed: Int)
 
 /**
  * URL → SonglistRef parser + import orchestrator. Spec docs/songlist-import-spec-android-tv.md.
@@ -76,8 +81,40 @@ object SonglistImporter {
         songlists: Songlists,
         library: LibraryStore,
     ): ImportResult {
-        val svc = songlists.serviceFor(ref.source) ?: throw ImportError.UnrecognizedURL
+        val detail = fetch(ref, songlists)
 
+        val trimmed = customName?.trim().orEmpty()
+        val name = when {
+            trimmed.isNotEmpty() -> trimmed
+            detail.info.name.isNotEmpty() -> detail.info.name
+            else -> "导入的歌单"
+        }
+        val playlist = library.createList(name, PlaylistOrigin(ref.source, ref.id))
+        // Batch write: one StateFlow update + one library.json save for the whole songlist.
+        library.addAllToList(playlist.id, detail.tracks)
+        return ImportResult(playlistId = playlist.id, count = detail.tracks.size)
+    }
+
+    /** 更新歌单: re-fetch an imported list's platform songlist and mirror it (order included). */
+    suspend fun refreshPlaylist(
+        playlist: Playlist,
+        songlists: Songlists,
+        library: LibraryStore,
+    ): RefreshResult {
+        val origin = playlist.origin ?: throw ImportError.UnrecognizedURL
+        val detail = fetch(SonglistRef(origin.source, origin.id), songlists)
+        val oldIds = playlist.tracks.mapTo(HashSet()) { it.id }
+        val newIds = detail.tracks.mapTo(HashSet()) { it.id }
+        library.replaceTracks(playlist.id, detail.tracks)
+        return RefreshResult(
+            total = newIds.size,
+            added = newIds.count { it !in oldIds },
+            removed = oldIds.count { it !in newIds },
+        )
+    }
+
+    private suspend fun fetch(ref: SonglistRef, songlists: Songlists): SonglistDetail {
+        val svc = songlists.serviceFor(ref.source) ?: throw ImportError.UnrecognizedURL
         // Stub only needs id + source — fetchDetail looks at those, the rest get overwritten.
         val stub = SonglistInfo(
             id = ref.id, source = ref.source,
@@ -89,16 +126,6 @@ object SonglistImporter {
             throw ImportError.FetchFailed(e.localizedMessage ?: e.toString())
         }
         if (detail.tracks.isEmpty()) throw ImportError.EmptyPlaylist
-
-        val trimmed = customName?.trim().orEmpty()
-        val name = when {
-            trimmed.isNotEmpty() -> trimmed
-            detail.info.name.isNotEmpty() -> detail.info.name
-            else -> "导入的歌单"
-        }
-        val playlist = library.createList(name)
-        // Batch write: one StateFlow update + one library.json save for the whole songlist.
-        library.addAllToList(playlist.id, detail.tracks)
-        return ImportResult(playlistId = playlist.id, count = detail.tracks.size)
+        return detail
     }
 }
