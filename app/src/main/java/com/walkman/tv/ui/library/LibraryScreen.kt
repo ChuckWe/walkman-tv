@@ -377,9 +377,9 @@ private fun PlaylistDetailPane(
     val playFocus = remember { FocusRequester() }
     LaunchedEffect(playlist.id) { runCatching { playFocus.requestFocus() } }
     var showBatchDownload by remember { mutableStateOf(false) }
-    var refreshing by remember(playlist.id) { mutableStateOf(false) }
-    val scope = rememberCoroutineScope()
-    val context = androidx.compose.ui.platform.LocalContext.current
+    val refreshingIds by com.walkman.tv.playback.imports.SonglistImporter.refreshing.collectAsState()
+    val refreshing = playlist.id in refreshingIds
+    val appContext = androidx.compose.ui.platform.LocalContext.current.applicationContext
 
     Column(modifier = Modifier.fillMaxSize()) {
         Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(bottom = 12.dp)) {
@@ -428,24 +428,15 @@ private fun PlaylistDetailPane(
                     if (playlist.origin != null) {
                         TvPill(
                             onClick = {
-                                if (refreshing) return@TvPill
-                                refreshing = true
-                                scope.launch {
-                                    val msg = runCatching {
-                                        com.walkman.tv.playback.imports.SonglistImporter.refreshPlaylist(
-                                            playlist = playlist,
-                                            songlists = appContainer.songlists,
-                                            library = appContainer.libraryStore,
-                                        )
-                                    }.fold(
-                                        onSuccess = { r ->
-                                            if (r.added == 0 && r.removed == 0) "已是最新（${r.total} 首）"
-                                            else "已更新：共 ${r.total} 首，新增 ${r.added}，移除 ${r.removed}"
-                                        },
-                                        onFailure = { e -> e.localizedMessage ?: e.toString() },
-                                    )
-                                    refreshing = false
-                                    android.widget.Toast.makeText(context, msg, android.widget.Toast.LENGTH_SHORT).show()
+                                // App-scoped so leaving the page doesn't cancel it; toast uses the
+                                // app context since the page may be gone by the time it finishes.
+                                com.walkman.tv.playback.imports.SonglistImporter.startRefresh(
+                                    playlist = playlist,
+                                    songlists = appContainer.songlists,
+                                    library = appContainer.libraryStore,
+                                    scope = appContainer.appScope,
+                                ) { msg ->
+                                    android.widget.Toast.makeText(appContext, msg, android.widget.Toast.LENGTH_SHORT).show()
                                 }
                             },
                             contentPadding = PaddingValues(horizontal = 14.dp, vertical = 7.dp),

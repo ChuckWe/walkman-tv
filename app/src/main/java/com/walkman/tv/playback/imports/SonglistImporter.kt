@@ -7,6 +7,13 @@ import com.walkman.tv.data.model.SonglistInfo
 import com.walkman.tv.data.model.SourceID
 import com.walkman.tv.data.store.LibraryStore
 import com.walkman.tv.source.catalog.Songlists
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.launch
 
 /** URL/ID parser result. Source + id uniquely identifies a platform playlist. */
 data class SonglistRef(val source: SourceID, val id: String)
@@ -95,8 +102,43 @@ object SonglistImporter {
         return ImportResult(playlistId = playlist.id, count = detail.tracks.size)
     }
 
+    private val _refreshing = MutableStateFlow<Set<String>>(emptySet())
+    /** Ids of playlists with a 更新歌单 in flight — lets the detail page show 更新中… again if the
+     *  user leaves and comes back mid-refresh. */
+    val refreshing: StateFlow<Set<String>> = _refreshing.asStateFlow()
+
+    /**
+     * Fire-and-forget 更新歌单 on an app-lifetime [scope], so leaving the page doesn't cancel it
+     * halfway (which could also leave library.json unsaved). [onDone] gets the user-facing
+     * result message on the main thread. No-op if this list is already refreshing.
+     */
+    fun startRefresh(
+        playlist: Playlist,
+        songlists: Songlists,
+        library: LibraryStore,
+        scope: CoroutineScope,
+        onDone: (String) -> Unit,
+    ) {
+        if (playlist.id in _refreshing.value) return
+        _refreshing.update { it + playlist.id }
+        scope.launch {
+            val msg = try {
+                val r = refreshPlaylist(playlist, songlists, library)
+                if (r.added == 0 && r.removed == 0) "「${playlist.name}」已是最新（${r.total} 首）"
+                else "「${playlist.name}」已更新：共 ${r.total} 首，新增 ${r.added}，移除 ${r.removed}"
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                "「${playlist.name}」更新失败：${e.localizedMessage ?: e}"
+            } finally {
+                _refreshing.update { it - playlist.id }
+            }
+            onDone(msg)
+        }
+    }
+
     /** 更新歌单: re-fetch an imported list's platform songlist and mirror it (order included). */
-    suspend fun refreshPlaylist(
+    private suspend fun refreshPlaylist(
         playlist: Playlist,
         songlists: Songlists,
         library: LibraryStore,
