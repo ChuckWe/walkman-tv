@@ -113,11 +113,11 @@ fun PlayerScreen(onClose: () -> Unit, modifier: Modifier = Modifier) {
     if (wantsFocus) tryRequestFocus(playFocus)
   }
 
-  // 播放控件自动隐藏：空闲 5 秒隐藏进度条 + 控制栏，焦点暂存到全屏的隐形 sink 上；
-  // 隐藏时按任意非返回键只负责唤出控件（吞掉该次按键，避免确认键误触暂停）。
+  // 播放控件自动隐藏：空闲 5 秒隐藏进度条 + 控制栏。隐藏后 Compose 内没有焦点，按键只会落到
+  // Activity，所以在 Activity.dispatchKeyEvent 层拦截：方向键 / 确认键只负责唤出控件（吞掉该次
+  // 按键，避免确认键误触暂停）；返回、菜单、媒体键照常放行。
   var controlsVisible by remember { mutableStateOf(true) }
   var idleTick by remember { mutableStateOf(0) }
-  val sinkFocus = remember { FocusRequester() }
   val autoHideActive = settings.autoHidePlayerControls && wantsFocus
   LaunchedEffect(autoHideActive, controlsVisible, idleTick) {
     if (!autoHideActive) {
@@ -127,8 +127,28 @@ fun PlayerScreen(onClose: () -> Unit, modifier: Modifier = Modifier) {
     if (controlsVisible) {
       delay(AUTO_HIDE_MS)
       controlsVisible = false
-      tryRequestFocus(sinkFocus)
     }
+  }
+  androidx.compose.runtime.DisposableEffect(autoHideActive) {
+    val events = appContainer.events
+    // 唤出控件那一次按键的后续（长按重复 + 抬起）也吞掉，否则抬起时焦点已在播放键上会触发暂停。
+    var wakeKey: Int? = null
+    val interceptor: (android.view.KeyEvent) -> Boolean = interceptor@{ e ->
+      idleTick++
+      if (e.keyCode == wakeKey) {
+        if (e.action == android.view.KeyEvent.ACTION_UP) wakeKey = null
+        return@interceptor true
+      }
+      if (controlsVisible || e.keyCode !in WAKE_KEYS) return@interceptor false
+      if (e.action == android.view.KeyEvent.ACTION_DOWN) {
+        wakeKey = e.keyCode
+        controlsVisible = true
+        scope.launch { tryRequestFocus(playFocus) }
+      }
+      true
+    }
+    if (autoHideActive) events.keyInterceptor = interceptor
+    onDispose { if (events.keyInterceptor === interceptor) events.keyInterceptor = null }
   }
 
   BackHandler(enabled = true) {
@@ -163,29 +183,8 @@ fun PlayerScreen(onClose: () -> Unit, modifier: Modifier = Modifier) {
     return
   }
 
-  Box(
-    modifier = modifier
-      .fillMaxSize()
-      .background(AppColors.BgDeep)
-      .onPreviewKeyEvent { evt ->
-        idleTick++
-        if (controlsVisible || evt.key == Key.Back) return@onPreviewKeyEvent false
-        if (evt.type == KeyEventType.KeyDown) {
-          controlsVisible = true
-          scope.launch { tryRequestFocus(playFocus) }
-        }
-        true
-      },
-  ) {
+  Box(modifier = modifier.fillMaxSize().background(AppColors.BgDeep)) {
     CoverBackdrop(picURL = track?.picURL)
-    // 控件隐藏时的焦点落点（只在隐藏时可聚焦，平时不参与方向键导航）
-    Box(
-      Modifier
-        .fillMaxSize()
-        .focusRequester(sinkFocus)
-        .focusProperties { canFocus = !controlsVisible }
-        .focusable(),
-    )
 
     if (track == null) {
       Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
@@ -656,6 +655,16 @@ private fun TransportBar(
 }
 
 private const val AUTO_HIDE_MS = 5_000L
+/** 控件隐藏时用来唤出控件的键：方向键 + 确认键。 */
+private val WAKE_KEYS = setOf(
+  android.view.KeyEvent.KEYCODE_DPAD_UP,
+  android.view.KeyEvent.KEYCODE_DPAD_DOWN,
+  android.view.KeyEvent.KEYCODE_DPAD_LEFT,
+  android.view.KeyEvent.KEYCODE_DPAD_RIGHT,
+  android.view.KeyEvent.KEYCODE_DPAD_CENTER,
+  android.view.KeyEvent.KEYCODE_ENTER,
+  android.view.KeyEvent.KEYCODE_NUMPAD_ENTER,
+)
 private const val SCRUB_TAP_MS = 220L
 private const val SCRUB_TAP_STEP_MS = 5_000L
 private const val SCRUB_BASE_PER_SEC = 6_000f
