@@ -12,6 +12,8 @@ import androidx.core.content.ContextCompat
 import java.io.File
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -25,12 +27,14 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -68,6 +72,9 @@ fun LocalImportDialog(onDismiss: () -> Unit) {
     var error by remember { mutableStateOf<String?>(null) }
     var showBrowser by remember { mutableStateOf(false) }
     var permHint by remember { mutableStateOf(false) }
+    // 导入到: null = 新建歌单, else append into this existing user list (dedupes by track id).
+    var target by remember { mutableStateOf<com.walkman.tv.data.model.Playlist?>(null) }
+    var showTargetPicker by remember { mutableStateOf(false) }
     // Default focus = 选择文件夹 since that's step 1 in the flow.
     val pickerFocus = remember { FocusRequester() }
     LaunchedEffect(Unit) { runCatching { pickerFocus.requestFocus() } }
@@ -150,20 +157,37 @@ fun LocalImportDialog(onDismiss: () -> Unit) {
             }
             Spacer(Modifier.size(12.dp))
 
-            Text("歌单名（导入后创建一个用户歌单）", color = AppColors.TextPrimary, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+            Text("导入到", color = AppColors.TextPrimary, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
             Spacer(Modifier.size(6.dp))
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clip(RoundedCornerShape(10.dp))
-                    .background(AppColors.BgDeep)
-                    .padding(horizontal = 14.dp, vertical = 12.dp),
+            TvPill(
+                onClick = { if (!importing) showTargetPicker = true },
+                contentPadding = PaddingValues(horizontal = 14.dp, vertical = 10.dp),
             ) {
                 Text(
-                    text = playlistName.ifEmpty { "（默认用文件夹名）" },
-                    color = if (playlistName.isEmpty()) AppColors.TextMuted else AppColors.TextPrimary,
-                    fontSize = 14.sp,
+                    target?.let { "已有歌单：${it.name}" } ?: "新建歌单",
+                    fontSize = 13.sp,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
                 )
+            }
+            if (target == null) {
+                Spacer(Modifier.size(12.dp))
+
+                Text("歌单名（导入后创建一个用户歌单）", color = AppColors.TextPrimary, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+                Spacer(Modifier.size(6.dp))
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(10.dp))
+                        .background(AppColors.BgDeep)
+                        .padding(horizontal = 14.dp, vertical = 12.dp),
+                ) {
+                    Text(
+                        text = playlistName.ifEmpty { "（默认用文件夹名）" },
+                        color = if (playlistName.isEmpty()) AppColors.TextMuted else AppColors.TextPrimary,
+                        fontSize = 14.sp,
+                    )
+                }
             }
 
             if (importing) {
@@ -224,11 +248,21 @@ fun LocalImportDialog(onDismiss: () -> Unit) {
                                         playlistName,
                                     ) { p -> progress = p }
                                 }.onSuccess { result ->
-                                    // Create a user playlist + batch-dump the tracks (one write,
-                                    // not one per track — a big folder would otherwise O(n²) stall).
-                                    val playlist = appContainer.libraryStore.createList(result.record.name)
-                                    appContainer.libraryStore.addAllToList(playlist.id, result.tracks)
-                                    doneMessage = "✓ 导入完成，共 ${result.tracks.size} 首"
+                                    // Batch-dump the tracks (one write, not one per track — a big folder would
+                                    // otherwise O(n²) stall) into a new list or the chosen existing one.
+                                    val dest = target
+                                    if (dest == null) {
+                                        val playlist = appContainer.libraryStore.createList(result.record.name)
+                                        appContainer.libraryStore.addAllToList(playlist.id, result.tracks)
+                                        doneMessage = "✓ 导入完成，共 ${result.tracks.size} 首"
+                                    } else {
+                                        val before = appContainer.libraryStore.userLists.value
+                                            .firstOrNull { it.id == dest.id }?.tracks.orEmpty().mapTo(HashSet()) { it.id }
+                                        val fresh = result.tracks.count { it.id !in before }
+                                        appContainer.libraryStore.addAllToList(dest.id, result.tracks)
+                                        doneMessage = "✓ 已添加 $fresh 首到「${dest.name}」" +
+                                            if (fresh < result.tracks.size) "（${result.tracks.size - fresh} 首已存在，已跳过）" else ""
+                                    }
                                     importing = false
                                 }.onFailure { e ->
                                     error = "导入失败：${e.message ?: "未知错误"}"
@@ -244,6 +278,17 @@ fun LocalImportDialog(onDismiss: () -> Unit) {
                 }
             }
         }
+    }
+
+    if (showTargetPicker) {
+        ImportTargetDialog(
+            current = target,
+            onPick = { picked ->
+                target = picked
+                showTargetPicker = false
+            },
+            onDismiss = { showTargetPicker = false },
+        )
     }
 
     if (showBrowser) {
@@ -269,3 +314,62 @@ private fun hasStorageAccess(ctx: android.content.Context): Boolean =
             android.Manifest.permission.READ_EXTERNAL_STORAGE,
         ) == android.content.pm.PackageManager.PERMISSION_GRANTED
     }
+
+/** 导入到: 新建歌单 or one of the user's lists. Focus starts on the current choice. */
+@Composable
+private fun ImportTargetDialog(
+    current: com.walkman.tv.data.model.Playlist?,
+    onPick: (com.walkman.tv.data.model.Playlist?) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    val lists by appContainer.libraryStore.userLists.collectAsState()
+    val options: List<com.walkman.tv.data.model.Playlist?> = listOf(null) + lists
+    val currentFocus = remember { FocusRequester() }
+    LaunchedEffect(Unit) {
+        kotlinx.coroutines.delay(60)
+        runCatching { currentFocus.requestFocus() }
+    }
+    Dialog(onDismissRequest = onDismiss, properties = DialogProperties(usePlatformDefaultWidth = false)) {
+        Column(
+            modifier = Modifier
+                .width(400.dp)
+                .clip(RoundedCornerShape(16.dp))
+                .background(AppColors.BgPanel)
+                .padding(horizontal = 22.dp, vertical = 20.dp),
+        ) {
+            Text("导入到", color = AppColors.TextPrimary, fontSize = 18.sp, fontWeight = FontWeight.Bold)
+            Spacer(Modifier.size(12.dp))
+            androidx.compose.foundation.lazy.LazyColumn(
+                modifier = Modifier.fillMaxWidth().heightIn(max = 360.dp),
+                verticalArrangement = Arrangement.spacedBy(6.dp),
+            ) {
+                items(options.size) { i ->
+                    val pl = options[i]
+                    val selected = pl?.id == current?.id
+                    TvFocusable(
+                        onClick = { onPick(pl) },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .let { if (selected) it.focusRequester(currentFocus) else it },
+                    ) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 10.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Text(
+                                pl?.name ?: "＋ 新建歌单",
+                                color = if (selected) AppColors.AccentGreen else AppColors.TextPrimary,
+                                fontSize = 14.sp,
+                                fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                                modifier = Modifier.weight(1f),
+                            )
+                            pl?.let { Text("${it.tracks.size} 首", color = AppColors.TextMuted, fontSize = 12.sp) }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}

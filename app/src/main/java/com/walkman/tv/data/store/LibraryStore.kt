@@ -66,6 +66,11 @@ class LibraryStore(context: Context) {
         persist()
     }
 
+    suspend fun removeFromHistory(trackId: String) {
+        _history.value = _history.value.copy(tracks = _history.value.tracks.filter { it.id != trackId })
+        persist()
+    }
+
     suspend fun clearHistory() {
         _history.value = _history.value.copy(tracks = emptyList())
         persist()

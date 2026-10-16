@@ -8,6 +8,9 @@ import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.focusRestorer
 import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.key.type
 import androidx.compose.ui.text.style.TextOverflow
 import kotlinx.coroutines.launch
 import androidx.compose.foundation.layout.Box
@@ -420,7 +423,21 @@ private fun HeroCarousel(heroes: List<HeroItem>, onSelect: (HeroItem) -> Unit) {
       .onFocusChanged { hasFocus = it.hasFocus },
     verticalArrangement = Arrangement.spacedBy(10.dp),
   ) {
-    HeroBanner(item = current, focusRequester = bannerFocus, onClick = { onSelect(current) })
+    HeroBanner(
+      item = current,
+      focusRequester = bannerFocus,
+      onClick = { onSelect(current) },
+      // Left / Right on the focused banner flips slides (#19). Left on the first slide falls
+      // through so the user can still reach the nav rail.
+      modifier = Modifier.onPreviewKeyEvent { e ->
+        if (heroes.size < 2 || e.type != androidx.compose.ui.input.key.KeyEventType.KeyDown) return@onPreviewKeyEvent false
+        when (e.key) {
+          androidx.compose.ui.input.key.Key.DirectionRight -> { index = (index + 1) % heroes.size; true }
+          androidx.compose.ui.input.key.Key.DirectionLeft -> if (index > 0) { index -= 1; true } else false
+          else -> false
+        }
+      },
+    )
     if (heroes.size > 1) {
       Row(
         modifier = Modifier.fillMaxWidth(),
@@ -454,12 +471,13 @@ private fun HeroBanner(
   item: HeroItem,
   focusRequester: androidx.compose.ui.focus.FocusRequester,
   onClick: () -> Unit,
+  modifier: Modifier = Modifier,
 ) {
   val tint = item.source.tintColor()
   val accentEnd = tint.copy(alpha = 0.65f)
   TvFocusable(
     onClick = onClick,
-    modifier = Modifier
+    modifier = modifier
       .fillMaxWidth()
       .height(260.dp)
       .focusRequester(focusRequester),
