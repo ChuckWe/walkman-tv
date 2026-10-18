@@ -59,7 +59,7 @@ import kotlinx.coroutines.launch
 
 /** One focusable track row: index, cover, name/singer, quality badge + source chip.
  *  [downloaded] shows a small green ✓ download icon — opt-in, only set by 我的列表.
- *  [onAddToPlaylist] / [onRemove] add always-visible icon buttons at the row end (D-pad Right
+ *  [onDownload] / [onAddToPlaylist] / [onRemove] add always-visible icon buttons at the row end (D-pad Right
  *  from the row reaches them); [modifier] applies to the main (play) focusable. */
 @Composable
 fun TrackRow(
@@ -68,7 +68,7 @@ fun TrackRow(
     modifier: Modifier = Modifier,
     nowPlaying: Boolean = false,
     downloaded: Boolean = false,
-    onLongClick: (() -> Unit)? = null,
+    onDownload: (() -> Unit)? = null,
     onAddToPlaylist: (() -> Unit)? = null,
     onRemove: (() -> Unit)? = null,
     removeLabel: String = "删除",
@@ -79,7 +79,7 @@ fun TrackRow(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {
-        TvFocusable(onClick = onClick, onLongClick = onLongClick, modifier = modifier.weight(1f)) {
+        TvFocusable(onClick = onClick, modifier = modifier.weight(1f)) {
             Row(
                 modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp),
                 verticalAlignment = Alignment.CenterVertically,
@@ -134,6 +134,7 @@ fun TrackRow(
                 SourceChip(track.source)
             }
         }
+        onDownload?.let { RowAction(Icons.Filled.Download, "下载", it) }
         onAddToPlaylist?.let { RowAction(Icons.AutoMirrored.Filled.PlaylistAdd, "添加到歌单", it) }
         onRemove?.let { RowAction(Icons.Filled.DeleteOutline, removeLabel, it, danger = true) }
     }
@@ -241,22 +242,18 @@ fun TrackList(
     removeLabel: String = "删除",
     onPlay: (index: Int) -> Unit,
 ) {
-    // Only 我的列表 opts in. Collect once here (shared StateFlows) and derive the set of tracks
-    // that are downloaded AND whose file is actually present, so rows don't each subscribe.
-    // Reactive: a finished download, a removed download, or a play-time "文件缺失" discovery all
-    // update the badges. (A missing file drops out of this set → its ✓ disappears.)
-    val downloadedIds: Set<String> = if (showDownloadedBadge) {
-        val records by com.walkman.tv.ui.appContainer.downloadStore.records.collectAsState()
-        val missing by com.walkman.tv.ui.appContainer.downloadStore.missingDownloads.collectAsState()
-        remember(records, missing) {
-            records.values
-                .filter { it.status == com.walkman.tv.data.model.DownloadStatus.COMPLETED }
-                .map { it.track.id }
-                .filter { it !in missing }
-                .toSet()
-        }
-    } else {
-        emptySet()
+    // Collect once here (shared StateFlows) and derive the set of tracks that are downloaded AND
+    // whose file is actually present, so rows don't each subscribe. Reactive: a finished download,
+    // a removed download, or a play-time "文件缺失" discovery all update it. Used to hide the row's
+    // 下载 button everywhere; the ✓ badge only where [showDownloadedBadge] (我的列表) opts in.
+    val records by com.walkman.tv.ui.appContainer.downloadStore.records.collectAsState()
+    val missing by com.walkman.tv.ui.appContainer.downloadStore.missingDownloads.collectAsState()
+    val completedIds: Set<String> = remember(records, missing) {
+        records.values
+            .filter { it.status == com.walkman.tv.data.model.DownloadStatus.COMPLETED }
+            .map { it.track.id }
+            .filter { it !in missing }
+            .toSet()
     }
     val listState = rememberLazyListState()
     val firstFocus = remember { FocusRequester() }
@@ -303,9 +300,10 @@ fun TrackList(
         }
     }
 
-    // The row's ＋ button (and long-press OK) opens the "add to playlist" picker. Owned here so
-    // every TrackList consumer (search / library / songlist / leaderboard / recommend) gets it.
+    // Row-end 下载 / ＋歌单 buttons open their dialogs. Owned here so every TrackList consumer
+    // (search / library / songlist / leaderboard / recommend) gets them.
     var pickerTrack by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf<Track?>(null) }
+    var downloadTrack by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf<Track?>(null) }
 
     LazyColumn(
         state = listState,
@@ -331,8 +329,8 @@ fun TrackList(
                 index = index,
                 modifier = rowModifier,
                 nowPlaying = track.id == nowPlayingId,
-                downloaded = track.id in downloadedIds,
-                onLongClick = { pickerTrack = track },
+                downloaded = showDownloadedBadge && track.id in completedIds,
+                onDownload = if (track.canDownload && track.id !in completedIds) ({ downloadTrack = track }) else null,
                 onAddToPlaylist = { pickerTrack = track },
                 onRemove = onRemove?.let { remove -> { remove(track) } },
                 removeLabel = removeLabel,
@@ -347,4 +345,11 @@ fun TrackList(
     pickerTrack?.let { t ->
         com.walkman.tv.ui.components.PlaylistPickerDialog(track = t, onDismiss = { pickerTrack = null })
     }
+    downloadTrack?.let { t ->
+        DownloadDialog(track = t, onDismiss = { downloadTrack = null })
+    }
 }
+
+/** Local-folder tracks are already files on the device — no 下载 button for them. */
+internal val Track.canDownload: Boolean
+    get() = !songmid.startsWith("lf://")

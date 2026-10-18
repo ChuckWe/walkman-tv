@@ -50,10 +50,11 @@ private fun Modifier.focusRequesterIfFirst(fr: FocusRequester): Modifier = this.
 /**
  * "Add this track to..." dialog. Shows every playlist (我喜欢的 + user-created) with a check
  * indicator showing whether [track] is already in it; tapping toggles membership. Bottom row
- * has a 新建歌单 affordance that opens [PlaylistNameDialog] inline.
+ * has a 新建歌单 affordance that opens [PlaylistNameDialog] inline. [showDownloadButton] adds a
+ * 下载 button — only the player uses it; track lists have their own row-end 下载 button.
  */
 @Composable
-fun PlaylistPickerDialog(track: Track, onDismiss: () -> Unit) {
+fun PlaylistPickerDialog(track: Track, onDismiss: () -> Unit, showDownloadButton: Boolean = false) {
     val scope = rememberCoroutineScope()
     val love by appContainer.libraryStore.love.collectAsState()
     val userLists by appContainer.libraryStore.userLists.collectAsState()
@@ -160,11 +161,13 @@ fun PlaylistPickerDialog(track: Track, onDismiss: () -> Unit) {
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.End),
             ) {
-                TvPill(
-                    onClick = { showDownload = true },
-                    contentPadding = PaddingValues(horizontal = 14.dp, vertical = 8.dp),
-                ) {
-                    Text("下载", fontSize = 13.sp)
+                if (showDownloadButton) {
+                    TvPill(
+                        onClick = { showDownload = true },
+                        contentPadding = PaddingValues(horizontal = 14.dp, vertical = 8.dp),
+                    ) {
+                        Text("下载", fontSize = 13.sp)
+                    }
                 }
                 TvPill(
                     onClick = { showCreate = true },

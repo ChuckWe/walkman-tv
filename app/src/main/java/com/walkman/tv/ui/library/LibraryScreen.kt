@@ -277,11 +277,11 @@ private fun HistoryTab(
     }
 }
 
-/** 列表顶部的一行操作提示：行尾按钮 + 长按。 */
+/** 列表顶部的一行操作提示：行尾按钮。 */
 @Composable
 private fun ListActionHint() {
     Text(
-        "选中歌曲后按右键可「添加到歌单 / 删除」，也可长按确认键",
+        "选中歌曲后按右键可「下载 / 添加到歌单 / 删除」",
         color = AppColors.TextMuted,
         fontSize = 11.sp,
     )
@@ -658,7 +658,6 @@ private fun DownloadedTab(
                             track = track,
                             index = idx,
                             nowPlaying = track.id == nowId,
-                            onLongClick = { pickerTrack = track },
                             onAddToPlaylist = { pickerTrack = track },
                             onRemove = { confirmDelete = track },
                             removeLabel = "删除下载",
@@ -674,7 +673,7 @@ private fun DownloadedTab(
             }
         }) {
             item {
-                EmptyHint("还没有下载，在歌曲上按右键「添加到歌单」里可以下载", Modifier.fillMaxSize())
+                EmptyHint("还没有下载，在歌曲上按右键选「下载」按钮即可下载", Modifier.fillMaxSize())
             }
         }
     }

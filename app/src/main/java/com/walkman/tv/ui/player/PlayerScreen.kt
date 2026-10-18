@@ -311,6 +311,7 @@ fun PlayerScreen(onClose: () -> Unit, modifier: Modifier = Modifier) {
       com.walkman.tv.ui.components.PlaylistPickerDialog(
         track = track,
         onDismiss = { showPicker = false },
+        showDownloadButton = true,
       )
     }
   }
