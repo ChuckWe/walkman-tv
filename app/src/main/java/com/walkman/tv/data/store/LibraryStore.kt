@@ -117,10 +117,19 @@ class LibraryStore(context: Context) {
         persist()
     }
 
-    /** Swap a user list's tracks wholesale (更新歌单 mirrors the platform songlist). */
-    suspend fun replaceTracks(listId: String, tracks: List<Track>) {
+    /** Swap a user list's tracks wholesale (更新歌单 / 重新扫描). A non-null [origin] replaces the
+     *  list's origin too (更新歌单 stores the new platform snapshot). */
+    suspend fun replaceTracks(listId: String, tracks: List<Track>, origin: PlaylistOrigin? = null) {
         _userLists.value = _userLists.value.map {
-            if (it.id == listId) it.copy(tracks = tracks.distinctBy { t -> t.id }, updatedAt = System.currentTimeMillis()) else it
+            if (it.id == listId) {
+                it.copy(
+                    tracks = tracks.distinctBy { t -> t.id },
+                    origin = origin ?: it.origin,
+                    updatedAt = System.currentTimeMillis(),
+                )
+            } else {
+                it
+            }
         }
         persist()
     }

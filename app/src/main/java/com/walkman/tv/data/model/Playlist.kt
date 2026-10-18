@@ -25,6 +25,12 @@ data class Playlist(
     }
 }
 
-/** Where an imported playlist came from — same shape as SonglistImporter's SonglistRef. */
+/** Where an imported playlist came from — same shape as SonglistImporter's SonglistRef.
+ *  [platformTrackIds] = the songs the platform list had at the last import / 更新歌单, so a refresh
+ *  can tell them apart from songs the user added by hand (kept). Null for lists imported by 1.4.0. */
 @Serializable
-data class PlaylistOrigin(val source: SourceID, val id: String)
+data class PlaylistOrigin(
+    val source: SourceID,
+    val id: String,
+    val platformTrackIds: List<String>? = null,
+)

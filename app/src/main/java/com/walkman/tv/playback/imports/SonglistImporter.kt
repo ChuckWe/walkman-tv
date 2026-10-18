@@ -26,7 +26,7 @@ sealed class ImportError(message: String) : Throwable(message) {
 
 data class ImportResult(val playlistId: String, val count: Int)
 
-data class RefreshResult(val total: Int, val added: Int, val removed: Int)
+data class RefreshResult(val total: Int, val added: Int, val removed: Int, val kept: Int)
 
 /**
  * URL → SonglistRef parser + import orchestrator. Spec docs/songlist-import-spec-android-tv.md.
@@ -96,7 +96,7 @@ object SonglistImporter {
             detail.info.name.isNotEmpty() -> detail.info.name
             else -> "导入的歌单"
         }
-        val playlist = library.createList(name, PlaylistOrigin(ref.source, ref.id))
+        val playlist = library.createList(name, PlaylistOrigin(ref.source, ref.id, detail.tracks.map { it.id }))
         // Batch write: one StateFlow update + one library.json save for the whole songlist.
         library.addAllToList(playlist.id, detail.tracks)
         return ImportResult(playlistId = playlist.id, count = detail.tracks.size)
@@ -125,7 +125,8 @@ object SonglistImporter {
             val msg = try {
                 val r = refreshPlaylist(playlist, songlists, library)
                 if (r.added == 0 && r.removed == 0) "「${playlist.name}」已是最新（${r.total} 首）"
-                else "「${playlist.name}」已更新：共 ${r.total} 首，新增 ${r.added}，移除 ${r.removed}"
+                else "「${playlist.name}」已更新：共 ${r.total} 首，新增 ${r.added}，移除 ${r.removed}" +
+                    if (r.kept > 0) "（保留手动添加的 ${r.kept} 首）" else ""
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
@@ -137,7 +138,13 @@ object SonglistImporter {
         }
     }
 
-    /** 更新歌单: re-fetch an imported list's platform songlist and mirror it (order included). */
+    /**
+     * 更新歌单: re-fetch an imported list's platform songlist and mirror it (order included).
+     * Songs the user added by hand (＋歌单 / local import into this list) are kept, appended after
+     * the platform songs. "By hand" = not in the platform snapshot from the last import/refresh;
+     * lists imported by 1.4.0 have no snapshot, so there it falls back to "from another source"
+     * (local songs, other platforms) — same-platform songs added by hand can't be told apart.
+     */
     private suspend fun refreshPlaylist(
         playlist: Playlist,
         songlists: Songlists,
@@ -145,17 +152,31 @@ object SonglistImporter {
     ): RefreshResult {
         val origin = playlist.origin ?: throw ImportError.UnrecognizedURL
         val detail = fetch(SonglistRef(origin.source, origin.id), songlists)
-        val oldIds = playlist.tracks.mapTo(HashSet()) { it.id }
+        // Re-read after the (slow) fetch so edits made meanwhile aren't lost.
+        val live = library.userLists.value.firstOrNull { it.id == playlist.id }
+            ?: throw IllegalStateException("歌单已被删除")
+        val snapshot = origin.platformTrackIds?.toHashSet()
+        val (fromPlatform, byHand) = live.tracks.partition { t ->
+            if (snapshot != null) t.id in snapshot else t.source == origin.source
+        }
         val newIds = detail.tracks.mapTo(HashSet()) { it.id }
-        library.replaceTracks(playlist.id, detail.tracks)
+        val kept = byHand.filter { it.id !in newIds }
+        val oldIds = fromPlatform.mapTo(HashSet()) { it.id }
+        library.replaceTracks(
+            playlist.id,
+            detail.tracks + kept,
+            origin.copy(platformTrackIds = detail.tracks.map { it.id }),
+        )
         return RefreshResult(
-            total = newIds.size,
+            total = newIds.size + kept.size,
             added = newIds.count { it !in oldIds },
             removed = oldIds.count { it !in newIds },
+            kept = kept.size,
         )
     }
 
-    private suspend fun fetch(ref: SonglistRef, songlists: Songlists): SonglistDetail {
+    private suspend fun fetch
+(ref: SonglistRef, songlists: Songlists): SonglistDetail {
         val svc = songlists.serviceFor(ref.source) ?: throw ImportError.UnrecognizedURL
         // Stub only needs id + source — fetchDetail looks at those, the rest get overwritten.
         val stub = SonglistInfo(
