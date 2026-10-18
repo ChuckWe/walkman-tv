@@ -78,7 +78,7 @@ fun LeaderboardScreen(onOpenPlayer: () -> Unit, modifier: Modifier = Modifier) {
             }
             Spacer(Modifier.padding(top = 6.dp))
             LazyColumn(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                items(boards, key = { it.id }) { b ->
+                items(boards.distinctBy { it.id }, key = { it.id }) { b ->
                     TvFocusable(onClick = { selected = b }, modifier = Modifier.fillMaxWidth()) {
                         Text(
                             b.name,

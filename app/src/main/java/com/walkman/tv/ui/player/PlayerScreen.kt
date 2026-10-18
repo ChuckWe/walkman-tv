@@ -213,6 +213,18 @@ fun PlayerScreen(onClose: () -> Unit, modifier: Modifier = Modifier) {
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
           )
+          // 播放状态：音源慢 / 超时 / 失败自动跳过 / 换源降级，之前都不显示，看起来像“切歌没反应”。
+          val status = state.error ?: (if (state.resolving) "正在获取播放地址…" else state.warning)
+          if (status != null) {
+            Text(
+              status,
+              color = if (state.error != null) AppColors.Danger else AppColors.Warning,
+              fontSize = 12.sp,
+              maxLines = 1,
+              overflow = TextOverflow.Ellipsis,
+              modifier = Modifier.padding(top = 4.dp),
+            )
+          }
           Spacer(Modifier.height(18.dp))
           LyricPane(
             lyrics,
@@ -888,12 +900,13 @@ private fun MvQueueDrawer(
           fontWeight = FontWeight.Bold,
         )
         Spacer(Modifier.height(10.dp))
+        val rowKeys = remember(queue) { com.walkman.tv.ui.components.uniqueKeys(queue.map { it.id }) }
         LazyColumn(
           state = listState,
           verticalArrangement = Arrangement.spacedBy(6.dp),
           modifier = Modifier.fillMaxSize(),
         ) {
-          itemsIndexed(queue, key = { _, t -> t.id }) { idx, track ->
+          itemsIndexed(queue, key = { i, _ -> rowKeys[i] }) { idx, track ->
             val isCurrent = idx == currentIndex
             QueueRow(
               track = track,

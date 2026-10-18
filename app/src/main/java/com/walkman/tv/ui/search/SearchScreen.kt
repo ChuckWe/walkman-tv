@@ -291,7 +291,7 @@ private fun ResultsPane(
                     horizontalArrangement = Arrangement.spacedBy(10.dp),
                     contentPadding = PaddingValues(vertical = 4.dp),
                 ) {
-                    items(songlists, key = { it.id + "_" + it.source.key }) { sl ->
+                    items(songlists.distinctBy { it.id + "_" + it.source.key }, key = { it.id + "_" + it.source.key }) { sl ->
                         Box(modifier = Modifier.width(140.dp)) {
                             MediaCard(
                                 title = sl.name,

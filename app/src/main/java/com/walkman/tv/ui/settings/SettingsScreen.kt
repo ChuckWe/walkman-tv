@@ -98,7 +98,7 @@ fun SettingsScreen(modifier: Modifier = Modifier) {
                 } else {
                     status = "正在导入文件…"
                     val r = appContainer.scriptStore.import(raw)
-                    status = r.fold({ "已导入：${it.name}" }, { "导入失败：${it.message}" })
+                    status = r.fold({ it.message }, { "导入失败：${it.message}" })
                 }
             }
         }
@@ -151,7 +151,7 @@ fun SettingsScreen(modifier: Modifier = Modifier) {
             showQr = false
             status = "正在导入上传的脚本…"
             val r = appContainer.scriptStore.import(raw)
-            status = r.fold({ "已导入：${it.name}" }, { "导入失败：${it.message}" })
+            status = r.fold({ it.message }, { "导入失败：${it.message}" })
         }
     }
 
@@ -559,7 +559,7 @@ private fun importInput(scope: kotlinx.coroutines.CoroutineScope, input: String,
             val raw = if (isUrl) appContainer.fetchText(trimmed) else trimmed
             appContainer.scriptStore.import(raw).getOrThrow()
         }
-        onStatus(result.fold({ "已导入：${it.name}" }, { "导入失败：${it.message}" }))
+        onStatus(result.fold({ it.message }, { "导入失败：${it.message}" }))
     }
 }
 
@@ -572,7 +572,7 @@ private fun importFromUrl(scope: kotlinx.coroutines.CoroutineScope, url: String,
             val raw = appContainer.fetchText(url.trim())
             appContainer.scriptStore.import(raw).getOrThrow()
         }
-        onStatus(result.fold({ "已导入：${it.name}" }, { "导入失败：${it.message}" }))
+        onStatus(result.fold({ it.message }, { "导入失败：${it.message}" }))
     }
 }
 

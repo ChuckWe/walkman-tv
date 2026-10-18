@@ -574,7 +574,7 @@ private fun SonglistRow(items: List<com.walkman.tv.data.model.SonglistInfo>, onS
     horizontalArrangement = Arrangement.spacedBy(14.dp),
     contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 4.dp, vertical = 4.dp),
   ) {
-    items(items, key = { "${it.source.key}_${it.id}" }) { info ->
+    items(items.distinctBy { "${it.source.key}_${it.id}" }, key = { "${it.source.key}_${it.id}" }) { info ->
       AlbumCard(
         picURL = info.picURL,
         title = info.name,
@@ -594,7 +594,7 @@ private fun BoardRow(items: List<com.walkman.tv.data.model.BoardInfo>, onSelect:
     horizontalArrangement = Arrangement.spacedBy(14.dp),
     contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 4.dp, vertical = 4.dp),
   ) {
-    items(items, key = { "${it.source.key}_${it.id}" }) { board ->
+    items(items.distinctBy { "${it.source.key}_${it.id}" }, key = { "${it.source.key}_${it.id}" }) { board ->
       AlbumCard(
         picURL = board.picURL,
         title = board.name,

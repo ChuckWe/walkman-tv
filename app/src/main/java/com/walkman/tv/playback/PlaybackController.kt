@@ -375,6 +375,11 @@ class PlaybackController(
         if (qualityCap == null) {
             lastAttemptedQuality = null
             networkRetryCount = 0
+            // Silence the previous song right away. Resolving can take a long time with a slow or
+            // dead source (every quality tier × 15s script timeout, then other-platform lookups),
+            // and the old track playing on under the new title looked like "切歌没成功".
+            runCatching { player.stop() }
+            _state.value = _state.value.copy(positionMs = 0)
         }
         val effectivePreferred = qualityCap ?: preferredQuality
         _state.value = _state.value.copy(index = index, resolving = true, error = null, warning = null, isMv = false)
@@ -471,9 +476,8 @@ class PlaybackController(
      * reaches READY (see the player listener). Guarded so a user skipping mid-delay wins.
      */
     private fun failAndAdvance(reason: String) {
-        // Stop the stale audio: playAt keeps the previous track playing while it resolves the
-        // next one (for gapless switching). If the target failed, that old track would otherwise
-        // keep playing — halt it now so a failed switch actually goes silent.
+        // Stop whatever is still loaded (e.g. a cascade retry's half-played attempt) so a failed
+        // track actually goes silent.
         runCatching { player.stop() }
         networkRetryCount = 0
         consecutiveFailures++

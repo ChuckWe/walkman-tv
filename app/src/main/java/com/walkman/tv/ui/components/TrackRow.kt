@@ -310,6 +310,8 @@ fun TrackList(
     var pickerTrack by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf<Track?>(null) }
     var downloadTrack by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf<Track?>(null) }
 
+    val rowKeys = remember(tracks) { uniqueKeys(tracks.map { it.id }) }
+
     LazyColumn(
         state = listState,
         // focusRestorer() remembers which row was last focused; when the player overlay closes
@@ -318,7 +320,7 @@ fun TrackList(
         verticalArrangement = Arrangement.spacedBy(6.dp),
         contentPadding = contentPadding,
     ) {
-        itemsIndexed(tracks, key = { _, t -> t.id }) { index, track ->
+        itemsIndexed(tracks, key = { i, _ -> rowKeys[i] }) { index, track ->
             // Two FocusRequesters can collide on the same row (row 0 == lastClicked). Compose
             // doesn't error, but the later-applied one wins; layering them with .then() makes
             // the priority explicit (lastClicked > firstFocus).
