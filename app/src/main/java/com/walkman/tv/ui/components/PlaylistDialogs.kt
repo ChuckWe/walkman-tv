@@ -49,7 +49,8 @@ private fun Modifier.focusRequesterIfFirst(fr: FocusRequester): Modifier = this.
 
 /**
  * "Add this track to..." dialog. Shows every playlist (我喜欢的 + user-created) with a check
- * indicator showing whether [track] is already in it; tapping toggles membership. Bottom row
+ * indicator showing whether [track] is in it; tapping toggles the check, and nothing is written
+ * until 完成 (取消 / back discards). Bottom row
  * has a 新建歌单 affordance that opens [PlaylistNameDialog] inline. [showDownloadButton] adds a
  * 下载 button — only the player uses it; track lists have their own row-end 下载 button.
  */
@@ -61,6 +62,27 @@ fun PlaylistPickerDialog(track: Track, onDismiss: () -> Unit, showDownloadButton
     val all = listOf(love) + userLists
     var showCreate by remember { mutableStateOf(false) }
     var showDownload by remember { mutableStateOf(false) }
+    // Pending membership: starts as the lists already holding [track]; rows only toggle this set.
+    var selected by remember(track.id) {
+        mutableStateOf(all.filter { pl -> pl.tracks.any { it.id == track.id } }.mapTo(HashSet()) { it.id }.toSet())
+    }
+    fun commit() {
+        val pending = selected
+        scope.launch {
+            val lib = appContainer.libraryStore
+            (listOf(lib.love.value) + lib.userLists.value).forEach { pl ->
+                val has = pl.tracks.any { it.id == track.id }
+                val want = pl.id in pending
+                if (has == want) return@forEach
+                when {
+                    pl.id == Playlist.LOVE -> lib.toggleFavorite(track)
+                    want -> lib.addToList(pl.id, track)
+                    else -> lib.removeFromList(pl.id, track.id)
+                }
+            }
+        }
+        onDismiss()
+    }
 
     // Focus the row most-likely useful first — the first playlist the track is *not* in (so
     // tapping just adds, no toggle dance), falling back to row 0.
@@ -102,24 +124,14 @@ fun PlaylistPickerDialog(track: Track, onDismiss: () -> Unit, showDownloadButton
                 verticalArrangement = Arrangement.spacedBy(6.dp),
             ) {
                 items(all, key = { it.id }) { pl ->
-                    val inList = pl.tracks.any { it.id == track.id }
+                    val inList = pl.id in selected
                     val rowMod = if (pl.id == all.first().id) {
                         Modifier.fillMaxWidth().focusRequesterIfFirst(firstRowFocus)
                     } else {
                         Modifier.fillMaxWidth()
                     }
                     TvFocusable(
-                        onClick = {
-                            scope.launch {
-                                if (pl.id == Playlist.LOVE) {
-                                    appContainer.libraryStore.toggleFavorite(track)
-                                } else if (inList) {
-                                    appContainer.libraryStore.removeFromList(pl.id, track.id)
-                                } else {
-                                    appContainer.libraryStore.addToList(pl.id, track)
-                                }
-                            }
-                        },
+                        onClick = { selected = if (inList) selected - pl.id else selected + pl.id },
                         modifier = rowMod,
                     ) {
                         Row(
@@ -181,6 +193,12 @@ fun PlaylistPickerDialog(track: Track, onDismiss: () -> Unit, showDownloadButton
                 }
                 TvPill(
                     onClick = onDismiss,
+                    contentPadding = PaddingValues(horizontal = 14.dp, vertical = 8.dp),
+                ) {
+                    Text("取消", fontSize = 13.sp)
+                }
+                TvPill(
+                    onClick = { commit() },
                     selected = true,
                     contentPadding = PaddingValues(horizontal = 22.dp, vertical = 8.dp),
                 ) {
@@ -202,8 +220,8 @@ fun PlaylistPickerDialog(track: Track, onDismiss: () -> Unit, showDownloadButton
             onConfirm = { name ->
                 scope.launch {
                     val created = appContainer.libraryStore.createList(name)
-                    // Convenience: add the current track to the just-created playlist.
-                    appContainer.libraryStore.addToList(created.id, track)
+                    // Convenience: pre-check the just-created playlist (applied on 完成).
+                    selected = selected + created.id
                 }
                 showCreate = false
             },

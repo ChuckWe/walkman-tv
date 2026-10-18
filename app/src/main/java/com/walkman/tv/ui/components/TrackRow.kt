@@ -134,9 +134,14 @@ fun TrackRow(
                 SourceChip(track.source)
             }
         }
-        onDownload?.let { RowAction(Icons.Filled.Download, "下载", it) }
-        onAddToPlaylist?.let { RowAction(Icons.AutoMirrored.Filled.PlaylistAdd, "添加到歌单", it) }
-        onRemove?.let { RowAction(Icons.Filled.DeleteOutline, removeLabel, it, danger = true) }
+        if (onDownload != null || onAddToPlaylist != null || onRemove != null) {
+            // Tight cluster: the buttons sit closer to each other than to the row.
+            Row(horizontalArrangement = Arrangement.spacedBy(2.dp)) {
+                onDownload?.let { RowAction(Icons.Filled.Download, "下载", it) }
+                onAddToPlaylist?.let { RowAction(Icons.AutoMirrored.Filled.PlaylistAdd, "添加到歌单", it) }
+                onRemove?.let { RowAction(Icons.Filled.DeleteOutline, removeLabel, it, danger = true) }
+            }
+        }
     }
 }
 
@@ -155,7 +160,7 @@ private fun RowAction(
         shape = androidx.compose.foundation.shape.CircleShape,
         containerColor = androidx.compose.ui.graphics.Color.Transparent,
         accent = if (danger) AppColors.Danger else AppColors.BrandPrimary,
-        contentPadding = PaddingValues(10.dp),
+        contentPadding = PaddingValues(8.dp),
     ) {
         androidx.tv.material3.Icon(
             imageVector = icon,

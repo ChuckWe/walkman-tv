@@ -79,38 +79,46 @@ fun LocalImportDialog(onDismiss: () -> Unit) {
     val pickerFocus = remember { FocusRequester() }
     LaunchedEffect(Unit) { runCatching { pickerFocus.requestFocus() } }
 
-    // Uses an in-app File browser (not SAF): many TVs have no DocumentsUI picker. Needs storage
-    // read access first — READ_EXTERNAL_STORAGE on API ≤ 29, All-files access on 30+.
+    // Uses an in-app File browser (not SAF): many TVs have no DocumentsUI picker. The plain
+    // media-read permission (READ_EXTERNAL_STORAGE <= 32, READ_MEDIA_AUDIO 33+) already lets
+    // java.io.File list folders and read audio files, so ask for that first - it is the one-tap
+    // runtime dialog. Only if it's denied do we send the user to the All-files access screen.
+    fun openAllFilesSettings() {
+        runCatching {
+            ctx.startActivity(
+                Intent(
+                    Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION,
+                    Uri.parse("package:${ctx.packageName}"),
+                ).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
+            )
+        }.onFailure {
+            runCatching {
+                ctx.startActivity(
+                    Intent(Settings.ACTION_MANAGE_ALL_FILES_ACCESS_PERMISSION)
+                        .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
+                )
+            }
+        }
+    }
+
     val permLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestPermission(),
-    ) { granted -> if (granted) showBrowser = true else permHint = true }
+    ) { granted ->
+        if (granted) {
+            showBrowser = true
+        } else {
+            // Denied (or "don't ask again"): hint + All-files screen as the fallback route.
+            permHint = true
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) openAllFilesSettings()
+        }
+    }
 
     fun openPicker() {
         if (hasStorageAccess(ctx)) {
             showBrowser = true
             return
         }
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-            // Route to the per-app "All files access" screen; user grants, returns, taps again.
-            permHint = true
-            runCatching {
-                ctx.startActivity(
-                    Intent(
-                        Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION,
-                        Uri.parse("package:${ctx.packageName}"),
-                    ).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
-                )
-            }.onFailure {
-                runCatching {
-                    ctx.startActivity(
-                        Intent(Settings.ACTION_MANAGE_ALL_FILES_ACCESS_PERMISSION)
-                            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
-                    )
-                }
-            }
-        } else {
-            permLauncher.launch(android.Manifest.permission.READ_EXTERNAL_STORAGE)
-        }
+        permLauncher.launch(mediaReadPermission())
     }
 
     Dialog(
@@ -150,7 +158,7 @@ fun LocalImportDialog(onDismiss: () -> Unit) {
             if (permHint) {
                 Spacer(Modifier.size(6.dp))
                 Text(
-                    "需要存储访问权限：请在系统设置里为「随便听」开启文件访问（或允许存储权限），然后返回再点选择文件夹。",
+                    "需要存储权限：请在系统设置里允许「随便听」访问音乐和音频（选「使用期间允许」或「允许管理所有文件」都可以），然后返回再点选择文件夹。",
                     color = AppColors.Warning,
                     fontSize = 12.sp,
                 )
@@ -304,16 +312,17 @@ fun LocalImportDialog(onDismiss: () -> Unit) {
     }
 }
 
-/** Whether we can browse arbitrary folders with java.io.File right now. */
+/** The runtime permission that lets java.io.File read shared-storage audio on this API level. */
+private fun mediaReadPermission(): String =
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) android.Manifest.permission.READ_MEDIA_AUDIO
+    else android.Manifest.permission.READ_EXTERNAL_STORAGE
+
+/** Whether we can browse folders and read audio with java.io.File right now: either the media
+ *  read permission (仅允许访问媒体 / 使用期间允许) or All-files access. */
 private fun hasStorageAccess(ctx: android.content.Context): Boolean =
-    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-        Environment.isExternalStorageManager()
-    } else {
-        ContextCompat.checkSelfPermission(
-            ctx,
-            android.Manifest.permission.READ_EXTERNAL_STORAGE,
-        ) == android.content.pm.PackageManager.PERMISSION_GRANTED
-    }
+    (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R && Environment.isExternalStorageManager()) ||
+        ContextCompat.checkSelfPermission(ctx, mediaReadPermission()) ==
+        android.content.pm.PackageManager.PERMISSION_GRANTED
 
 /** 导入到: 新建歌单 or one of the user's lists. Focus starts on the current choice. */
 @Composable
