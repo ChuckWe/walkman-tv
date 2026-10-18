@@ -508,6 +508,9 @@ private fun HeroBanner(
             item.songlist.name,
             color = Color.White,
             fontSize = 30.sp,
+            // Explicit: the inherited TV text style's line height is sized for body text, so a
+            // wrapped 30sp title overlapped its second line.
+            lineHeight = 38.sp,
             fontWeight = FontWeight.Black,
             maxLines = 2,
             overflow = TextOverflow.Ellipsis,
