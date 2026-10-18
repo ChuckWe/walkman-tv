@@ -264,6 +264,16 @@ fun SettingsScreen(modifier: Modifier = Modifier) {
                 color = AppColors.TextMuted,
                 fontSize = 11.sp,
             )
+            Spacer(Modifier.height(12.dp))
+            ToggleRow("显示播放调试信息", settings.showPlaybackDebug) {
+                scope.launch { appContainer.settingsStore.update { it.copy(showPlaybackDebug = !it.showPlaybackDebug) } }
+            }
+            Spacer(Modifier.height(8.dp))
+            Text(
+                "开启后，播放页歌手名下方显示获取播放地址、播放失败自动跳过、换音源等状态，便于排查音源问题。",
+                color = AppColors.TextMuted,
+                fontSize = 11.sp,
+            )
         }
 
         Section("下载目录") {

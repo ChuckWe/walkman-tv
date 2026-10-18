@@ -213,9 +213,9 @@ fun PlayerScreen(onClose: () -> Unit, modifier: Modifier = Modifier) {
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
           )
-          // 播放状态：音源慢 / 超时 / 失败自动跳过 / 换源降级，之前都不显示，看起来像“切歌没反应”。
+          // 播放调试信息（设置里开启）：获取地址 / 失败自动跳过 / 换源降级，排查音源问题用。
           val status = state.error ?: (if (state.resolving) "正在获取播放地址…" else state.warning)
-          if (status != null) {
+          if (settings.showPlaybackDebug && status != null) {
             Text(
               status,
               color = if (state.error != null) AppColors.Danger else AppColors.Warning,
