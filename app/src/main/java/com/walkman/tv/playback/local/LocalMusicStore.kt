@@ -186,7 +186,7 @@ class LocalMusicStore(
         val rootUri = Uri.parse(record.persistedUriString)
         val leaves: List<Pair<Uri, String>> = if (rootUri.scheme == "file") {
             val dir = java.io.File(rootUri.path ?: "")
-            if (!dir.isDirectory) throw IllegalStateException("文件夹不可访问：${record.name}")
+            if (!dir.isDirectory || dir.listFiles() == null) throw IllegalStateException("文件夹不可访问：${record.name}")
             mutableListOf<Pair<java.io.File, String>>().also { walkFile(dir, "", it) }
                 .map { (f, rel) -> Uri.fromFile(f) to rel }
         } else {
@@ -195,6 +195,9 @@ class LocalMusicStore(
             mutableListOf<Pair<DocumentFile, String>>().also { walk(root, "", it) }
                 .map { (f, rel) -> f.uri to rel }
         }.sortedBy { it.second.lowercase() }
+        // Zero audio files almost always means we lost read access (permission revoked, drive
+        // remounted empty) rather than the user deleting everything — refuse instead of wiping.
+        if (leaves.isEmpty()) throw IllegalStateException("「${record.name}」里没有读到音频文件，可能没有存储权限或文件夹已移动")
 
         leaves.mapIndexed { idx, (uri, relPath) ->
             val id = "local_" + sha256Hex("$folderID|$relPath").take(24)

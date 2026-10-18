@@ -260,7 +260,7 @@ fun LocalImportDialog(onDismiss: () -> Unit) {
                                     // otherwise O(n²) stall) into a new list or the chosen existing one.
                                     val dest = target
                                     if (dest == null) {
-                                        val playlist = appContainer.libraryStore.createList(result.record.name)
+                                        val playlist = appContainer.libraryStore.createList(playlistName.ifBlank { result.record.name })
                                         appContainer.libraryStore.addAllToList(playlist.id, result.tracks)
                                         doneMessage = "✓ 导入完成，共 ${result.tracks.size} 首"
                                     } else {

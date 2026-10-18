@@ -25,9 +25,11 @@ object LocalPlaylistRescan {
     private val _progress = MutableStateFlow<Map<String, Float>>(emptyMap())
     val progress: StateFlow<Map<String, Float>> = _progress.asStateFlow()
 
-    /** Folder ids in [playlist] that we can rescan (record still known). Empty ⇒ hide the button. */
+    /** Folder ids in [playlist] that we can rescan (record still known). Empty ⇒ hide the button.
+     *  Built-in lists (我喜欢的 / 播放历史) are excluded — only user lists are rewritten here. */
     fun rescannableFolders(playlist: Playlist, local: LocalMusicStore): Set<String> =
-        playlist.tracks.mapNotNullTo(LinkedHashSet()) { local.folderIdOf(it) }
+        if (playlist.id == Playlist.LOVE || playlist.id == Playlist.HISTORY) emptySet()
+        else playlist.tracks.mapNotNullTo(LinkedHashSet()) { local.folderIdOf(it) }
             .filterTo(LinkedHashSet()) { local.hasFolder(it) }
 
     /** Fire-and-forget on an app-lifetime [scope]; [onDone] gets the user-facing message. */
@@ -60,13 +62,12 @@ object LocalPlaylistRescan {
                 val removed = playlist.tracks.size - kept.size
                 // Re-read the live list so songs added/removed by the user during the scan survive.
                 val live = library.userLists.value.firstOrNull { it.id == playlist.id }
-                if (live != null) {
-                    val liveKept = live.tracks.filter { t ->
-                        val folder = local.folderIdOf(t)
-                        folder == null || folder !in scanned || t.id in onDisk
-                    }
-                    library.replaceTracks(playlist.id, liveKept + added)
+                    ?: throw IllegalStateException("歌单已被删除")
+                val liveKept = live.tracks.filter { t ->
+                    val folder = local.folderIdOf(t)
+                    folder == null || folder !in scanned || t.id in onDisk
                 }
+                library.replaceTracks(playlist.id, liveKept + added)
                 if (added.isEmpty() && removed == 0) "「${playlist.name}」已是最新"
                 else "「${playlist.name}」扫描完成：新增 ${added.size}，移除 $removed"
             } catch (e: CancellationException) {
