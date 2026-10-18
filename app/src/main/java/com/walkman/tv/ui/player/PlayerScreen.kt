@@ -215,7 +215,7 @@ fun PlayerScreen(onClose: () -> Unit, modifier: Modifier = Modifier) {
           )
           // 播放调试信息（设置里开启）：获取地址 / 失败自动跳过 / 换源降级，排查音源问题用。
           val status = state.error ?: (if (state.resolving) "正在获取播放地址…" else state.warning)
-          if (settings.showPlaybackDebug && status != null) {
+          if (settings.showDebugInfo && status != null) {
             Text(
               status,
               color = if (state.error != null) AppColors.Danger else AppColors.Warning,

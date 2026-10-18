@@ -46,9 +46,9 @@ data class Settings(
     /** Player screen: hide progress bar + transport after a few idle seconds; any D-pad / OK key
      *  brings them back. Off by default. */
     val autoHidePlayerControls: Boolean = false,
-    /** Player screen: show a status line under the singer (正在获取播放地址 / 播放失败已跳过 /
-     *  已换音源 …) — for diagnosing a slow or broken source. Off by default. */
-    val showPlaybackDebug: Boolean = false,
+    /** 显示调试信息: app-wide switch for diagnostic UI (off by default). Currently: the player's
+     *  status line (正在获取播放地址 / 播放失败已跳过 / 已换音源 …). Gate future debug UI on it too. */
+    val showDebugInfo: Boolean = false,
     /** Absolute path of the chosen download root (a writable storage volume). null ⇒ default
      *  app-scoped Music dir on primary storage. See DownloadStore.availableRoots(). */
     val customDownloadDir: String? = null,
