@@ -89,7 +89,12 @@ class JsScriptRuntime(
     }
 
     /** Ask the script to perform an action (musicUrl / lyric / pic). */
-    suspend fun requestAction(source: SourceID, action: String, info: JSONObject, timeoutMs: Long = 15_000): Any? {
+    suspend fun requestAction(
+        source: SourceID,
+        action: String,
+        info: JSONObject,
+        timeoutMs: Long = DEFAULT_ACTION_TIMEOUT_MS,
+    ): Any? {
         if (!inited) throw ScriptException("脚本尚未初始化")
         val requestKey = UUID.randomUUID().toString()
         val deferred = CompletableDeferred<Any?>()
@@ -278,5 +283,6 @@ class JsScriptRuntime(
 
     companion object {
         private const val TAG = "JsScriptRuntime"
+        private const val DEFAULT_ACTION_TIMEOUT_MS = 45_000L
     }
 }
