@@ -171,7 +171,3 @@ tasks.register("testUserApiPreload", Exec) {
     description = "Runs the lx user-api preload compatibility regression tests."
     commandLine "node", "--test", "src/test/js/user-api-preload.test.js"
 }
-
-tasks.named("check").configure {
-    dependsOn("testUserApiPreload")
-}

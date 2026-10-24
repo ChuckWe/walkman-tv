@@ -27,25 +27,67 @@ function loadPreloadWithoutNativeUrlSearchParams() {
   return { context, nativeCalls }
 }
 
-test('QuickJS preload supplies the URLSearchParams operations used by XingHai', () => {
+test('QuickJS preload supplies a compatible URLSearchParams implementation', () => {
   const { context } = loadPreloadWithoutNativeUrlSearchParams()
 
   const result = vm.runInContext(`(() => {
     const params = new URLSearchParams('source=kw&tag=first')
     params.append('tag', 'second value')
     params.set('rid', 'MUSIC_123')
+    const seen = []
+    params.forEach(function(value, name, owner) {
+      seen.push([name, value, owner === params, this.marker])
+    }, { marker: 'bound' })
+    const entries = Array.from(params.entries())
+    const iterated = Array.from(params)
+    const mutablePair = params.entries().next().value
+    mutablePair[1] = 'must not leak into params'
+    params.delete('tag')
     return JSON.stringify({
       source: params.get('source'),
-      tag: params.get('tag'),
+      tagsBeforeDelete: entries.filter(([name]) => name === 'tag').map(([, value]) => value),
+      hasTagAfterDelete: params.has('tag'),
+      hasRid: params.has('rid'),
+      allSources: params.getAll('source'),
+      sourceAfterIteratorMutation: params.get('source'),
       missing: params.get('missing'),
+      entries,
+      iterated,
+      seen,
+      entriesIsMethod: typeof params.entries === 'function',
+      ownKeys: Object.keys(params),
       query: params.toString(),
     })
   })()`, context)
 
   assert.deepEqual(JSON.parse(result), {
     source: 'kw',
-    tag: 'first',
+    tagsBeforeDelete: ['first', 'second value'],
+    hasTagAfterDelete: false,
+    hasRid: true,
+    allSources: ['kw'],
+    sourceAfterIteratorMutation: 'kw',
     missing: null,
-    query: 'source=kw&tag=first&tag=second+value&rid=MUSIC_123',
+    entries: [
+      ['source', 'kw'],
+      ['tag', 'first'],
+      ['tag', 'second value'],
+      ['rid', 'MUSIC_123'],
+    ],
+    iterated: [
+      ['source', 'kw'],
+      ['tag', 'first'],
+      ['tag', 'second value'],
+      ['rid', 'MUSIC_123'],
+    ],
+    seen: [
+      ['source', 'kw', true, 'bound'],
+      ['tag', 'first', true, 'bound'],
+      ['tag', 'second value', true, 'bound'],
+      ['rid', 'MUSIC_123', true, 'bound'],
+    ],
+    entriesIsMethod: true,
+    ownKeys: [],
+    query: 'source=kw&rid=MUSIC_123',
   })
 })

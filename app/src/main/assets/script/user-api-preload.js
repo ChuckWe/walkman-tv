@@ -9,8 +9,9 @@ globalThis.lx_setup = (key, id, name, description, version, author, homepage, ra
     const decode = value => decodeURIComponent(String(value).replace(/\+/g, ' '))
     const encode = value => encodeURIComponent(String(value)).replace(/%20/g, '+')
     globalThis.URLSearchParams = class URLSearchParams {
+      #params = []
+
       constructor(init = '') {
-        this.entries = []
         if (typeof init === 'string') {
           const query = init.startsWith('?') ? init.substring(1) : init
           if (query) {
@@ -29,26 +30,68 @@ globalThis.lx_setup = (key, id, name, description, version, author, homepage, ra
       }
 
       append(name, value) {
-        this.entries.push([String(name), String(value)])
+        this.#params.push([String(name), String(value)])
       }
 
       set(name, value) {
         name = String(name)
         value = String(value)
-        const first = this.entries.findIndex(entry => entry[0] === name)
-        this.entries = this.entries.filter(entry => entry[0] !== name)
-        if (first < 0) this.entries.push([name, value])
-        else this.entries.splice(first, 0, [name, value])
+        let found = false
+        for (let i = 0; i < this.#params.length; i++) {
+          if (this.#params[i][0] !== name) continue
+          if (!found) {
+            this.#params[i][1] = value
+            found = true
+          } else {
+            this.#params.splice(i--, 1)
+          }
+        }
+        if (!found) this.#params.push([name, value])
       }
 
       get(name) {
         name = String(name)
-        const entry = this.entries.find(item => item[0] === name)
+        const entry = this.#params.find(item => item[0] === name)
         return entry ? entry[1] : null
       }
 
+      getAll(name) {
+        name = String(name)
+        return this.#params.filter(item => item[0] === name).map(item => item[1])
+      }
+
+      has(name) {
+        name = String(name)
+        return this.#params.some(item => item[0] === name)
+      }
+
+      delete(name) {
+        name = String(name)
+        for (let i = this.#params.length - 1; i >= 0; i--) {
+          if (this.#params[i][0] === name) this.#params.splice(i, 1)
+        }
+      }
+
+      forEach(callback, thisArg) {
+        for (let i = 0; i < this.#params.length; i++) {
+          const [name, value] = this.#params[i]
+          callback.call(thisArg, value, name, this)
+        }
+      }
+
+      *entries() {
+        for (let i = 0; i < this.#params.length; i++) {
+          const [name, value] = this.#params[i]
+          yield [name, value]
+        }
+      }
+
+      [Symbol.iterator]() {
+        return this.entries()
+      }
+
       toString() {
-        return this.entries.map(([name, value]) => `${encode(name)}=${encode(value)}`).join('&')
+        return this.#params.map(([name, value]) => `${encode(name)}=${encode(value)}`).join('&')
       }
     }
   }
